@@ -26,18 +26,22 @@ public class TreeHandler implements Listener {
             Material.AZALEA_LEAVES, Material.FLOWERING_AZALEA_LEAVES
     );
 
+    private final List<Material> axeMaterials = Arrays.asList(
+            Material.WOODEN_AXE, Material.STONE_AXE,
+            Material.IRON_AXE, Material.GOLDEN_AXE,
+            Material.DIAMOND_AXE, Material.NETHERITE_AXE
+    );
+
     public TreeHandler() {
     }
 
     @EventHandler
     public void onBlockBreak(BlockBreakEvent e) {
         if (!e.isCancelled() && isLogMaterial(e.getBlock().getType())) {
-            if (isAxe(e.getPlayer().getInventory().getItemInMainHand())) {
+            if (isAxeMaterial(e.getPlayer().getInventory().getItemInMainHand().getType())) {
                 if (e.getPlayer().getGameMode().equals(org.bukkit.GameMode.SURVIVAL)) {
                     if (isTree(e.getBlock())) {
                         breakTree(e.getBlock(), e.getPlayer());
-                    } else {
-                        e.getBlock().breakNaturally();
                     }
                 }
             }
@@ -60,13 +64,6 @@ public class TreeHandler implements Listener {
                 player.playSound(player.getLocation(), org.bukkit.Sound.BLOCK_METAL_BREAK, 1.0F, 1.0F);
             }
         }
-    }
-
-    public boolean isAxe(ItemStack item) {
-        Material itemType = item.getType();
-        return itemType == Material.WOODEN_AXE || itemType == Material.STONE_AXE ||
-                itemType == Material.IRON_AXE || itemType == Material.GOLDEN_AXE ||
-                itemType == Material.DIAMOND_AXE || itemType == Material.NETHERITE_AXE;
     }
 
     public boolean isTree(Block logBlock) {
@@ -99,4 +96,6 @@ public class TreeHandler implements Listener {
     private boolean isLeafMaterial(Material material) {
         return leafMaterials.contains(material);
     }
+
+    private boolean isAxeMaterial(Material material) { return axeMaterials.contains(material); }
 }
