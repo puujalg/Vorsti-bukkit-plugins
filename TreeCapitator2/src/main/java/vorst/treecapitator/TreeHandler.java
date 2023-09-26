@@ -97,5 +97,7 @@ public class TreeHandler implements Listener {
         return leafMaterials.contains(material);
     }
 
-    private boolean isAxeMaterial(Material material) { return axeMaterials.contains(material); }
+    private boolean isAxeMaterial(Material material) {
+        return axeMaterials.contains(material);
+    }
 }
