@@ -1,0 +1,4 @@
+name: VorstiPuuAsi
+version: '${project.version}'
+main: vorst.treecapitator.TreeCapitator2
+api-version: '1.20'
