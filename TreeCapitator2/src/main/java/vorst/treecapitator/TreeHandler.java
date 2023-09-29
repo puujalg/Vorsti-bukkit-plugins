@@ -8,6 +8,9 @@ import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.block.BlockBreakEvent;
 import org.bukkit.inventory.ItemStack;
+import org.bukkit.inventory.meta.Damageable;
+import org.bukkit.inventory.meta.ItemMeta;
+
 
 import java.util.Arrays;
 import java.util.List;
@@ -37,18 +40,21 @@ public class TreeHandler implements Listener {
 
     @EventHandler
     public void onBlockBreak(BlockBreakEvent e) {
-        if (!e.isCancelled() && isLogMaterial(e.getBlock().getType())) {
-            if (isAxeMaterial(e.getPlayer().getInventory().getItemInMainHand().getType())) {
-                if (e.getPlayer().getGameMode().equals(org.bukkit.GameMode.SURVIVAL)) {
-                    if (isTree(e.getBlock())) {
-                        breakTree(e.getBlock(), e.getPlayer());
-                    }
+        if (!e.isCancelled() && e.getPlayer().getGameMode().equals(org.bukkit.GameMode.SURVIVAL)) {
+            Material blockType = e.getBlock().getType();
+
+            if (isLogMaterial(blockType) && isTree(e.getBlock())) {
+                Material handItemType = e.getPlayer().getInventory().getItemInMainHand().getType();
+
+                if (isAxeMaterial(handItemType)) {
+                    breakTree(e.getBlock(), e.getPlayer());
                 }
             }
         }
     }
 
     public void breakTree(Block block, Player player) {
+
         block.breakNaturally();
         Block blockAbove = block.getRelative(BlockFace.UP);
 
@@ -56,12 +62,24 @@ public class TreeHandler implements Listener {
             breakTree(blockAbove, player);
 
             ItemStack mainHandItem = player.getInventory().getItemInMainHand();
-            short durability = (short) (mainHandItem.getDurability() + 1);
-            mainHandItem.setDurability(durability);
+            ItemMeta itemMeta = mainHandItem.getItemMeta();
 
-            if (durability > mainHandItem.getType().getMaxDurability()) {
-                player.getInventory().remove(mainHandItem);
-                player.playSound(player.getLocation(), org.bukkit.Sound.BLOCK_METAL_BREAK, 1.0F, 1.0F);
+            if (itemMeta instanceof Damageable) {
+                Damageable damageableItem = (Damageable) itemMeta;
+                int newDamage = damageableItem.getDamage() + 1;
+
+                Material material = mainHandItem.getType();
+                int maxDurability = material.getMaxDurability();
+
+                if (newDamage >= maxDurability) {
+                    player.getInventory().removeItem(mainHandItem);
+                    player.playSound(player.getLocation(), org.bukkit.Sound.BLOCK_METAL_BREAK, 1.0F, 1.0F);
+                } else {
+                    ItemMeta updatedMeta = itemMeta.clone();
+                    ((Damageable) updatedMeta).setDamage(newDamage);
+                    mainHandItem.setItemMeta(updatedMeta);
+                    player.getInventory().setItemInMainHand(mainHandItem);
+                }
             }
         }
     }
@@ -75,7 +93,6 @@ public class TreeHandler implements Listener {
             }
             currentBlock = currentBlock.getRelative(BlockFace.UP);
         } while (isLogMaterial(currentBlock.getType()));
-
         return false;
     }
 
