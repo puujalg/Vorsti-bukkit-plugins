@@ -11,21 +11,19 @@ import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.Damageable;
 import org.bukkit.inventory.meta.ItemMeta;
 
-
-import java.util.Arrays;
-import java.util.List;
+import java.util.*;
 
 public class TreeHandler implements Listener {
     private final List<Material> logMaterials = Arrays.asList(
             Material.OAK_LOG, Material.BIRCH_LOG, Material.ACACIA_LOG,
             Material.CHERRY_LOG, Material.DARK_OAK_LOG, Material.JUNGLE_LOG,
-            Material.MANGROVE_LOG, Material.SPRUCE_LOG
+            Material.MANGROVE_LOG, Material.SPRUCE_LOG, Material.PALE_OAK_LOG
     );
 
     private final List<Material> leafMaterials = Arrays.asList(
             Material.OAK_LEAVES, Material.BIRCH_LEAVES, Material.ACACIA_LEAVES,
             Material.CHERRY_LEAVES, Material.DARK_OAK_LEAVES, Material.JUNGLE_LEAVES,
-            Material.MANGROVE_LEAVES, Material.SPRUCE_LEAVES,
+            Material.MANGROVE_LEAVES, Material.SPRUCE_LEAVES, Material.PALE_OAK_LEAVES,
             Material.AZALEA_LEAVES, Material.FLOWERING_AZALEA_LEAVES
     );
 
@@ -44,55 +42,139 @@ public class TreeHandler implements Listener {
             Material blockType = e.getBlock().getType();
 
             if (isLogMaterial(blockType) && isTree(e.getBlock())) {
-                Material handItemType = e.getPlayer().getInventory().getItemInMainHand().getType();
+                Block block = e.getBlock();
+                boolean isComplicated = isComplicatedTree(block);
 
+                Material handItemType = e.getPlayer().getInventory().getItemInMainHand().getType();
                 if (isAxeMaterial(handItemType)) {
-                    breakTree(e.getBlock(), e.getPlayer());
+                    if (isComplicated) {
+                        breakTree(block, e.getPlayer());
+                    } else {
+                        breakSimpleTree(block, e.getPlayer());
+                    }
                 }
             }
         }
     }
 
     public void breakTree(Block block, Player player) {
+        Queue<Block> blocksToBreak = new LinkedList<>();
+        blocksToBreak.add(block);
 
-        block.breakNaturally();
-        Block blockAbove = block.getRelative(BlockFace.UP);
+        ItemStack mainHandItem = player.getInventory().getItemInMainHand();
+        Set<Block> brokenBlocks = new HashSet<>(); // count blocks
+        int blocksBroken = 0;
 
-        if (isLogMaterial(blockAbove.getType())) {
-            breakTree(blockAbove, player);
+        while (!blocksToBreak.isEmpty()) {
+            Block currentBlock = blocksToBreak.poll();
+            if (brokenBlocks.contains(currentBlock)) {
+                continue; // no need to continue if already borken... maybe
+            }
 
-            ItemStack mainHandItem = player.getInventory().getItemInMainHand();
-            ItemMeta itemMeta = mainHandItem.getItemMeta();
+            currentBlock.breakNaturally();
+            brokenBlocks.add(currentBlock); // add blocks idk
+            blocksBroken++; // count blocks
 
-            if (itemMeta instanceof Damageable) {
-                Damageable damageableItem = (Damageable) itemMeta;
-                int newDamage = damageableItem.getDamage() + 1;
-
-                Material material = mainHandItem.getType();
-                int maxDurability = material.getMaxDurability();
-
-                if (newDamage >= maxDurability) {
-                    player.getInventory().removeItem(mainHandItem);
-                    player.playSound(player.getLocation(), org.bukkit.Sound.BLOCK_METAL_BREAK, 1.0F, 1.0F);
-                } else {
-                    ItemMeta updatedMeta = itemMeta.clone();
-                    ((Damageable) updatedMeta).setDamage(newDamage);
-                    mainHandItem.setItemMeta(updatedMeta);
-                    player.getInventory().setItemInMainHand(mainHandItem);
+            // check near blocks.. 26? smth
+            for (int dx = -1; dx <= 1; dx++) {
+                for (int dy = -1; dy <= 1; dy++) {
+                    for (int dz = -1; dz <= 1; dz++) {
+                        if (dx == 0 && dy == 0 && dz == 0) continue; // skip current block
+                        Block adjacentBlock = currentBlock.getRelative(dx, dy, dz);
+                        if (isLogMaterial(adjacentBlock.getType()) && !brokenBlocks.contains(adjacentBlock)) {
+                            blocksToBreak.add(adjacentBlock);
+                        }
+                    }
                 }
             }
+        }
+
+        // After breaking all logs, apply durability damage
+        if (handleToolDurability(mainHandItem, player, blocksBroken)) {
+            return; // questionable... can refractor prolly
+        }
+    }
+
+    public void breakSimpleTree(Block block, Player player) {
+        Block currentBlock = block;
+        ItemStack mainHandItem = player.getInventory().getItemInMainHand();
+        Set<Block> brokenBlocks = new HashSet<>(); // how many block borken?
+        int blocksBroken = 0;
+
+        while (isLogMaterial(currentBlock.getType())) {
+            if (brokenBlocks.contains(currentBlock)) {
+                break; // tool broken, exit
+            }
+
+            currentBlock.breakNaturally();
+            brokenBlocks.add(currentBlock);
+            blocksBroken++;
+
+            // next block vertical
+            currentBlock = currentBlock.getRelative(BlockFace.UP);
+        }
+
+        // after breaking, add damage
+        if (handleToolDurability(mainHandItem, player, blocksBroken)) {
+            return; // questionable... can refractor prolly (cuz void)
+        }
+    }
+
+    public boolean isComplicatedTree(Block logBlock) {
+        Block currentBlock = logBlock;
+
+        while (isLogMaterial(currentBlock.getType())) {
+            for (BlockFace face : new BlockFace[]{
+                    BlockFace.NORTH, BlockFace.SOUTH, BlockFace.EAST, BlockFace.WEST,
+                    BlockFace.NORTH_EAST, BlockFace.NORTH_WEST, BlockFace.SOUTH_EAST, BlockFace.SOUTH_WEST,
+                    BlockFace.UP, BlockFace.DOWN
+            }) {
+                Block adjacentBlock = currentBlock.getRelative(face);
+
+                if (isLogMaterial(adjacentBlock.getType())) {
+                    if (!isPartOfSimpleTrunk(logBlock, adjacentBlock)) {
+                        return true;
+                    }
+                }
+            }
+            currentBlock = currentBlock.getRelative(BlockFace.UP);
+        }
+        return false;
+    }
+
+    private boolean handleToolDurability(ItemStack mainHandItem, Player player, int blocksBroken) {
+        ItemMeta itemMeta = mainHandItem.getItemMeta();
+
+        if (!(itemMeta instanceof Damageable)) {
+            return false;
+        }
+
+        Damageable damageableItem = (Damageable) itemMeta;
+        int newDamage = damageableItem.getDamage() + blocksBroken;
+
+        // tool borken check
+        if (newDamage >= mainHandItem.getType().getMaxDurability()) {
+            player.getInventory().setItemInMainHand(new ItemStack(Material.AIR)); // remove tool
+            player.playSound(player.getLocation(), org.bukkit.Sound.ENTITY_ITEM_BREAK, 1.0F, 1.0F);
+            return true; // tool is poof
+        } else {
+            damageableItem.setDamage(newDamage);
+            mainHandItem.setItemMeta(itemMeta); // new damage
+            return false; // tool ok
         }
     }
 
     public boolean isTree(Block logBlock) {
         Block currentBlock = logBlock;
 
+        // check for leaves
         do {
             if (hasLeavesNextToLog(currentBlock)) {
                 return true;
             }
-            currentBlock = currentBlock.getRelative(BlockFace.UP);
+            currentBlock = currentBlock.getRelative(BlockFace.UP);  // upward check
         } while (isLogMaterial(currentBlock.getType()));
+
         return false;
     }
 
@@ -104,6 +186,10 @@ public class TreeHandler implements Listener {
             }
         }
         return false;
+    }
+
+    private boolean isPartOfSimpleTrunk(Block baseLog, Block checkLog) {
+        return checkLog.getRelative(BlockFace.UP).equals(baseLog) || checkLog.getRelative(BlockFace.DOWN).equals(baseLog);
     }
 
     private boolean isLogMaterial(Material material) {
