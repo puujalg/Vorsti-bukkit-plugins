@@ -9,8 +9,5 @@
         <module name="treecapitator" />
       </profile>
     </annotationProcessing>
-    <bytecodeTargetLevel>
-      <module name="treecapitator" target="1.8" />
-    </bytecodeTargetLevel>
   </component>
 </project>
